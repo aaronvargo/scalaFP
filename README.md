@@ -23,11 +23,11 @@ no subtype relation, even though `Monad[F]` is defined as a subtype of `Applicat
 - lens style optics are all encoded in terms of a single type:
 
   ~~~scala
-  abstract class Optic[-PC[_[_, _]], -FC[_[_]], S, T, A, B] { self =>
+  abstract class Optic[-PC[_[_, _]], -FC[_[_]], S, T, A, B] {
     def explicitTransform[P[_, _], F[_]](f: P[A, F[B]], P: PC[P], F: FC[F]): P[S, F[T]]
   }
 
-  type Is[S, T, A, B] = Optic[Any2, Any1, S, T, A, B]
+  type Equality[S, T, A, B] = Optic[Any2, Any1, S, T, A, B]
   type Iso[S, T, A, B] = Optic[Profunctor, Functor, S, T, A, B]
   type AnIso[S, T, A, B] = Optic[Profunctor, IdFunctor, S, T, A, B]
   type Prism[S, T, A, B] = Optic[Choice, Applicative, S, T, A, B]

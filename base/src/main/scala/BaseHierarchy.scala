@@ -1,6 +1,6 @@
 package scalaFP
 
-trait BaseHierarchy extends BaseHierarchy.BH0
+trait BaseHierarchy extends BaseHierarchy.BH
 
 object BaseHierarchy {
   trait BH extends BH0 {
@@ -8,9 +8,10 @@ object BaseHierarchy {
     // implicit def inst[A](implicit a: A): Inst[A] = Inst(a)
   }
   trait BH0 extends BH1 {
+    implicit def equalityInst[A]: A === A = Inst(Optic.id)
     implicit def any1[F[_]]: IAny1[F] = Inst(new Any1[F]{})
     implicit def any2[P[_, _]]: IAny2[P] = Inst(new Any2[P]{})
-    implicit def ApplyFunctor[F[_]](implicit e: IApply[F]): IFunctor[F] = e.widen
+    implicit def applyFunctor[F[_]](implicit e: IApply[F]): IFunctor[F] = e.widen
     implicit def applicativeApply[F[_]](implicit e: IApplicative[F]): IApply[F] = e.widen
     implicit def monadApplicative[F[_]](implicit e: IMonad[F]): IApplicative[F] = e.widen
     implicit def monadBind[F[_]](implicit e: IMonad[F]): IBind[F] = e.widen
@@ -28,7 +29,10 @@ object BaseHierarchy {
     implicit def constFunctorPhantom[S, F[_]](implicit e: IConstFunctor[S, F]): IPhantom[F] = e.widen
   }
   trait BH2 {
-    implicit def profunctorFunctor[P[_, _], A](implicit e: IProfunctor[P]): IFunctor[P[A, ?]] = Inst(e.run.functor)
+    implicit def profunctorFunctor[P[_, _], A](implicit e: IProfunctor[P]): IFunctor[P[A, ?]] =
+      Inst(e.run.functor)
+      // Inst.coerce.oover(e)(_.functor) // Interestingly, oover is the only version that doesn't require a type annotation
+
     implicit def monadErrorMonad[S, F[_]](implicit e: IMonadError[S, F]): IMonad[F] = e.widen
   }
 }

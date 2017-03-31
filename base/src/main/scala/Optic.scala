@@ -32,19 +32,22 @@ object Optic {
   /** Monomorphize an optic. Seems this can't be done with dot syntax. */
   def mono[PC[_[_, _]], FC[_[_]], S, A](o: Optic_[PC, FC, S, A]): Optic_[PC, FC, S, A] = o
 
-  def id[PC[_[_, _]], FC[_[_]], S, T]: Optic[PC, FC, S, T, S, T] =
-    new Optic[PC, FC, S, T, S, T] {
-      def explicitTransform[P[_, _], F[_]](f: P[S, F[T]], P: PC[P], F: FC[F]): P[S, F[T]] = f
-    }
-
   def compose[PC[_[_, _]], FC[_[_]], S, T, A, B, C, D]
     (o1: Optic[PC, FC, S, T, A, B], o2: Optic[PC, FC, A, B, C, D])
       : Optic[PC, FC, S, T, C, D] =
     new _Optic[PC, FC, S, T, C, D] {
       def transform[P[_, _], F[_]](f: P[C, F[D]])
-               (implicit P: Inst[PC[P]], F: Inst[FC[F]]): P[S, F[T]] = o1.transform[P, F](o2.transform[P, F](f))
+                   (implicit P: Inst[PC[P]], F: Inst[FC[F]]): P[S, F[T]] =
+        o1.transform[P, F](o2.transform[P, F](f))
     }.optic
 
+  private[this] object IdOptic extends Optic[Any2, Any1, Any, Any, Any, Any] {
+    def explicitTransform[P[_, _], F[_]]
+      (f: P[Any, F[Any]], P: Any2[P], F: Any1[F]): P[Any, F[Any]] = f
+  }
+
+  def id[PC[_[_, _]], FC[_[_]], S, T]: Optic[PC, FC, S, T, S, T] =
+    IdOptic.asInstanceOf[Optic[PC, FC, S, T, S, T]]
 
   def iso[S, T, A, B](f: S => A, g: B => T): Iso[S, T, A, B] =
     new _Optic[Profunctor, Functor, S, T, A, B] {
@@ -65,7 +68,7 @@ object Optic {
 
   def lens[S, T, A, B](_get: S => A, _set: B => S => T): Lens[S, T, A, B] =
     new _LensLike[Functor, S, T, A, B] {
-      def overF[F[_]: IFunctor](f: A => F[B])(s: S): F[T] = f(_get(s)).map(x => _set(x)(s))
+      def overF[F[_]: IFunctor](f: A => F[B])(s: S): F[T] = f(_get(s)).map(_set(_)(s))
     }.optic
 
   /** Construct a lens to a supertype */
@@ -104,7 +107,7 @@ object Optic {
 }
 
 trait OpticModule {
-  type Is[S, T, A, B] = Optic[Any2, Any1, S, T, A, B]
+  type Equality[S, T, A, B] = Optic[Any2, Any1, S, T, A, B]
   type Iso[S, T, A, B] = Optic[Profunctor, Functor, S, T, A, B]
   type AnIso[S, T, A, B] = Optic[Profunctor, IdFunctor, S, T, A, B]
   type Prism[S, T, A, B] = Optic[Choice, Applicative, S, T, A, B]
@@ -117,7 +120,7 @@ trait OpticModule {
   type Lens[S, T, A, B] = LensLike[Functor, S, T, A, B]
 
   type Optic_[PC[_[_, _]], FC[_[_]], S, A] = Optic[PC, FC, S, S, A, A]
-  type Is_[S, A] = Is[S, S, A, A]
+  type Equality_[S, A] = Equality[S, S, A, A]
   type Iso_[S, A] = Iso[S, S, A, A]
   type AnIso_[S, A] = AnIso[S, S, A, A]
   type Prism_[S, A] = Prism[S, S, A, A]

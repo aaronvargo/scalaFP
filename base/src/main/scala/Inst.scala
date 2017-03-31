@@ -2,25 +2,28 @@ package scalaFP
 
 trait InstNewtype {
   type Inst[A]
-  def coerce[A]: A === Inst[A]
-  def apply[A](a: A): Inst[A] = coerce(a)
-  def run[A](implicit i: Inst[A]): A = coerce.sym(i)
-  def widen[A, B >: A](i: Inst[A]): Inst[B] = apply(run(i))
+  def apply[A](a: A): Inst[A]
+  def run[A](implicit i: Inst[A]): A
+  def coerce[A, B]: Equality[Inst[A], Inst[B], A, B]
+  def widen[A, B >: A](i: Inst[A]): Inst[B]
 }
 
 object InstAlias extends InstNewtype {
   type Inst[A] = A
-  def coerce[A]: A === A = Leibniz.refl
+  def apply[A](a: A): A = a
+  def run[A](implicit i: A): A = i
+  def coerce[A, B]: Equality[A, B, A, B] = Optic.id
+  def widen[A, B >: A](i: A): B = i
   val Newtype: InstNewtype = this
 }
 
 trait InstModule  {
   val Inst: InstAlias.Newtype.type = InstAlias.Newtype
   type Inst[A] = Inst.Inst[A]
-  implicit def instSyntax[A](i: Inst[A]): InstSyntax[A] = new InstSyntax[A](i)
+
+  implicit class InstSyntax[A](self: Inst[A]) {
+    def run: A = Inst.run(self)
+    def widen[B >: A]: Inst[B] = Inst.widen(self)
+  }
 }
 
-class InstSyntax[A](val self: Inst[A]) extends AnyVal {
-  def widen[B >: A]: Inst[B] = Inst.widen(self)
-  def run: A = Inst.run(self)
-}

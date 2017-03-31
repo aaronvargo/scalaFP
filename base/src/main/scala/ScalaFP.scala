@@ -3,7 +3,6 @@ package scalaFP
 trait ScalaFP
     extends BaseHierarchy
     with InstModule
-    with LeibnizModule
     with IdentityModule
     with ConstModule
     with ExchangeModule
@@ -30,4 +29,6 @@ trait ScalaFP
   type IProfunctor[P[_, _]] = Inst[Profunctor[P]]
   type IChoice[P[_, _]] = Inst[Choice[P]]
   type IIsFn[P[_, _]] = Inst[IsFn[P]]
+
+  type ===[A, B] = Inst[Equality_[A, B]]
 }

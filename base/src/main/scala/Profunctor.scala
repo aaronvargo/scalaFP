@@ -1,6 +1,6 @@
 package scalaFP
 
-trait Profunctor[P[_, _]] {
+trait Profunctor[P[_, _]] extends Any2[P] {
   def dimap[A, B, C, D](p: P[A, B])(f: C => A, g: B => D): P[C, D]
 
   def functor[A]: Functor[P[A, ?]] = new Functor[P[A, ?]] {
