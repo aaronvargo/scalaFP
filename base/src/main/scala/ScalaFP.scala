@@ -9,6 +9,7 @@ trait ScalaFP
     with ExchangeModule
     with IsFnModule
     with OpticModule
+    with MonadReaderModule
     with MiscSyntax {
 
   type IAny1[F[_]] = Inst[Any1[F]]
