@@ -93,6 +93,13 @@ object Optic {
     def transform[P[_, _], F[_]](f: P[A, F[B]])
                  (implicit P: Inst[PC[P]], F: Inst[FC[F]]): P[S, F[T]] =
       self.explicitTransform[P, F](f, P.run, F.run)
+
+    /** Assumes second argument of P has representational role */
+    def transformId[P[_,_]](p: P[A, B])(implicit P: Inst[PC[P]], e: Inst[FC[Identity]]): P[S, T] =
+      Identity.coerce.flipEq.subst[P[S, ?]](self.transform[P, Identity](Identity.coerce.subst[P[A, ?]](p)))
+
+    /** Assumes second argument of P has representational role */
+    def explicitTransformId[P[_,_]](p: P[A, B], P: PC[P])(implicit e: Inst[FC[Identity]]): P[S, T] = transformId(p)(Inst(P), e)
   }
 
   implicit class LensLikeSyntax[C[_[_]], S, T, A, B](self: LensLike[C, S, T, A, B]) {
@@ -120,7 +127,7 @@ object Optic {
         def dimap[A0, B0, C, D](p: (A0 => A, B => B0))(f: C => A0, g: B0 => D): (C => A, B => D) =
           p.bimap(_.compose(f), _.andThen(g))
       }
-      self.explicitTransform[P, Id]((identity, identity), pProfunctor, IdentityAlias.idFunctor)
+      self.explicitTransformId[P]((identity, identity), pProfunctor)
     }
 
     def foldIso[R](f: (S => A, B => T) => R): R = f.tupled(isoPair)
@@ -149,7 +156,7 @@ object Optic {
                     case Right(Right(a)) => Right(a)
                   })
       }
-      self.explicitTransform[P, Id]((identity, _.right), pChoice, IdentityAlias.idFunctor)
+      self.explicitTransformId[P]((identity, _.right), pChoice)
     }
 
     def matching(s: S): Either[T, A] = prismPair._2(s)
@@ -163,7 +170,7 @@ object Optic {
       def pChoiceBifunctor = new ChoiceBifunctor[P] {
         def dualmap[A0, B0, C0, D0](p: B0)(f: B0 => D0): D0 = f(p)
       }
-      self.explicitTransform[P, Id](b, pChoiceBifunctor, IdentityAlias.idFunctor)
+      self.explicitTransformId[P](b, pChoiceBifunctor)
     }
   }
 
