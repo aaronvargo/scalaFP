@@ -1,8 +1,10 @@
 package scalaFP
 
 trait Apply[F[_]] extends Functor[F] with Apply.Ap[F] with Apply.ApFst[F] with Apply.ApSnd[F] {
-  def apFst[A, B](fa: F[A], fb: F[B]): F[A] = ap(fa)(mapConst(fb, identity[A]))
-  def apSnd[A, B](fa: F[A], fb: F[B]): F[B] = ap(fa)(map(fb)(b => _ => b))
+  override def map[A, B](fa: F[A])(f: A => B): F[B]
+  override def ap[A, B](fa: F[A])(f: F[A => B]): F[B]
+  override def apFst[A, B](fa: F[A], fb: F[B]): F[A] = ap(fa)(mapConst(fb, identity[A]))
+  override def apSnd[A, B](fa: F[A], fb: F[B]): F[B] = ap(fa)(map(fb)(b => _ => b))
 }
 
 object Apply {
@@ -22,8 +24,8 @@ object Apply {
 
   trait From[F[_]] extends Apply[F] with Functor.From[F] {
     def applyDelegate: Apply[F]
-    def functorDelegate = applyDelegate
-    def ap[A, B](fa: F[A])(f: F[A => B]): F[B] = applyDelegate.ap(fa)(f)
+    override def functorDelegate: Functor[F] = applyDelegate
+    override def ap[A, B](fa: F[A])(f: F[A => B]): F[B] = applyDelegate.ap(fa)(f)
     override def apFst[A, B](fa: F[A], fb: F[B]): F[A] = applyDelegate.apFst(fa, fb)
     override def apSnd[A, B](fa: F[A], fb: F[B]): F[B] = applyDelegate.apSnd(fa, fb)
   }

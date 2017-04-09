@@ -4,8 +4,13 @@ trait BaseHierarchy extends BaseHierarchy.BH
 
 object BaseHierarchy {
   trait BH extends BH0 {
-    // TODO Consider adding this. Would allow instances to be put in companion objects in cases where they don't overlap.
-    // implicit def inst[A](implicit a: A): Inst[A] = Inst(a)
+    implicit def rightInstance[C[_[_]], P[_, _], A](implicit e: IRight1[C, P]): Inst[C[P[A, ?]]] = Inst(e.run.rightInstance)
+
+    /* TODO repeat entire hierarchy for Right and Left?
+       IRight[Apply] => IRight[Functor], etc?
+    */
+
+    //TODO Find a way to add default instances such as (Bind, Applicative) => Monad
   }
   trait BH0 extends BH1 {
     implicit def equalityInst[A]: A === A = Inst(Optic.id)
@@ -20,6 +25,9 @@ object BaseHierarchy {
     implicit def contrapplicativePhantom[F[_]](implicit e: IContrapplicative[F]): IPhantom[F] = e.widen
     implicit def choiceProfunctor[P[_, _]](implicit e: IChoice[P]): IProfunctor[P] = e.widen
     implicit def isFnChoice[P[_, _]](implicit e: IIsFn[P]): IChoice[P] = e.widen
+    implicit def profunctorRight[P[_, _]](implicit e: IProfunctor[P]): IRight1[Functor, P] = e.widen
+    implicit def profunctorLeft[P[_, _]](implicit e: IProfunctor[P]): ILeft1[Contravariant, P] = e.widen
+    implicit def choiceBifunctorBifunctor[P[_, _]](implicit e: IChoiceBifunctor[P]): IBifunctor[P] = e.widen
   }
   trait BH1 extends BH2 {
     implicit def phantomFunctor[F[_]](implicit e: IPhantom[F]): IFunctor[F] = e.widen
@@ -27,12 +35,12 @@ object BaseHierarchy {
     implicit def contrapplicativeApplicative[F[_]](implicit e: IContrapplicative[F]): IApplicative[F] = e.widen
     implicit def monadReaderMonad[S, F[_]](implicit e: IMonadReader[S, F]): IMonad[F] = e.widen
     implicit def constFunctorPhantom[S, F[_]](implicit e: IConstFunctor[S, F]): IPhantom[F] = e.widen
+    implicit def bifunctorRight[P[_, _]](implicit e: IBifunctor[P]): IRight1[Functor, P] = e.widen
+    implicit def bifunctorLeft[P[_, _]](implicit e: IBifunctor[P]): ILeft1[Functor, P] = e.widen
+    implicit def choiceBifunctorChoice[P[_, _]](implicit e: IChoiceBifunctor[P]): IChoice[P] = e.widen
+    implicit def choiceBifunctorLeft[P[_, _]](implicit e: IChoiceBifunctor[P]): ILeft1[Phantom, P] = e.widen
   }
   trait BH2 {
-    implicit def profunctorFunctor[P[_, _], A](implicit e: IProfunctor[P]): IFunctor[P[A, ?]] =
-      Inst(e.run.functor)
-      // Inst.coerce.oover(e)(_.functor) // Interestingly, oover is the only version that doesn't require a type annotation
-
     implicit def monadErrorMonad[S, F[_]](implicit e: IMonadError[S, F]): IMonad[F] = e.widen
   }
 }

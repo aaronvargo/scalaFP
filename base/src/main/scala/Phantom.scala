@@ -1,7 +1,9 @@
 package scalaFP
 
 trait Phantom[F[_]] extends Functor[F] with Contravariant[F] {
-  def phantommap[A, B](fa: F[A]): F[B] = contramap(map(fa)((x: A) => ()))((x: B) => ())
+  def phantommap[A, B](fa: F[A]): F[B]
+  override def map[A, B](fa: F[A])(f: A => B): F[B] = phantommap(fa)
+  override def contramap[A, B](fa: F[A])(f: B => A): F[B] = phantommap(fa)
 }
 
 object Phantom {
@@ -9,14 +11,16 @@ object Phantom {
 
   trait From[F[_]] extends Phantom[F] with Functor.From[F] with Contravariant.From[F] {
     def phantomDelegate: Phantom[F]
-    def functorDelegate = phantomDelegate
-    def contravariantDelegate = phantomDelegate
+    override def functorDelegate: Functor[F] = phantomDelegate
+    override def contravariantDelegate: Contravariant[F] = phantomDelegate
     override def phantommap[A, B](fa: F[A]): F[B] = phantomDelegate.phantommap(fa)
+    override def map[A, B](fa: F[A])(f: A => B): F[B] = phantomDelegate.map(fa)(f)
+    override def contramap[A, B](fa: F[A])(f: B => A): F[B] = phantomDelegate.contramap(fa)(f)
   }
 
-  trait FromPhantommap[F[_]] extends Phantom[F] {
-    override def phantommap[A, B](fa: F[A]): F[B]
-    override def contramap[A, B](fa: F[A])(f: B => A): F[B] = phantommap(fa)
-    override def map[A, B](fa: F[A])(f: A => B): F[B] = phantommap(fa)
+  trait FromMapContramap[F[_]] extends Phantom[F] {
+    override def map[A, B](fa: F[A])(f: A => B): F[B]
+    override def contramap[A, B](fa: F[A])(f: B => A): F[B]
+    override def phantommap[A, B](fa: F[A]): F[B] = contramap(map(fa)((x: A) => ()))((x: B) => ())
   }
 }

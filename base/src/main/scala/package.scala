@@ -1,1 +1,1 @@
-package object scalaFP extends ScalaFP
+package object scalaFP extends Base

@@ -54,10 +54,24 @@ object Optic {
       def transform[P[_, _]: IProfunctor, F[_]: IFunctor](p: P[A, F[B]]): P[S, F[T]] = p.dimap(f, _.map(g))
     }.optic
 
-  def getter[S, T, A, B](_get: S => A): Getter[S, T, A, B] =
-    new _LensLike[Phantom, S, T, A, B] {
-      def overF[F[_]: IPhantom](f: A => F[B])(s: S): F[T] =
-        f(_get(s)).phantommap
+  def review[S, T, A, B](_review: B => T): Review[S, T, A, B] = new _Optic[ChoiceBifunctor, IdFunctor, S, T, A, B] {
+    def transform[P[_, _] : IChoiceBifunctor, F[_] : IIdFunctor](p: P[A,F[B]]): P[S,F[T]] =
+      p.dualmap(_.map(_review))
+  }.optic
+
+  def prism[S, T, A, B](_review: B => T, _matching: S => Either[T, A]): Prism[S, T, A, B] =
+    new _Optic[Choice, Applicative, S, T, A, B] {
+      def transform[P[_,_] : IChoice, F[_]: IApplicative](p: P[A, F[B]]): P[S, F[T]] =
+        p.choiceright.dimap(_matching, (_ : Either[T, F[B]]) match {
+                              case Left(x) => x.pure[F]
+                              case Right(x) => x.map(_review)
+                            })
+    }.optic
+
+  def getter[S, T, A, B](_get: S => A): Optic[Profunctor, Phantom, S, T, A, B] =
+    new _Optic[Profunctor, Phantom, S, T, A, B] {
+      def transform[P[_, _]: IProfunctor, F[_]: IPhantom](f: P[A, F[B]]): P[S, F[T]] =
+        f.dimap(_get, _.phantommap)
     }.optic
 
   def setter[S, T, A, B](_modify: (A => B, S) => T): Setter[S, T, A, B] =
@@ -76,30 +90,113 @@ object Optic {
 
   implicit class OpticSyntax[PC[_[_, _]], FC[_[_]], S, T, A, B](self: Optic[PC, FC, S, T, A, B]) {
     //Can't be added directly to the class due to variance
-    def transform[P[_, _], F[_]](f: P[A, F[B]])(implicit P: Inst[PC[P]], F: Inst[FC[F]]): P[S, F[T]] =
+    def transform[P[_, _], F[_]](f: P[A, F[B]])
+                 (implicit P: Inst[PC[P]], F: Inst[FC[F]]): P[S, F[T]] =
       self.explicitTransform[P, F](f, P.run, F.run)
   }
 
-  implicit class AnIsoSytax[S, T, A, B](self: AnIso[S, T, A, B]) {
-    def foldIso[R](f: (S => A, B => T) => R): R = {
-      val x = self.transform[Exchange[A, B, ?, ?], Identity](Exchange(identity, Identity(_)))
-      f(x.to, x.from.andThen(_.runIdentity))
-    }
-    def flipIso: Iso[B, A, T, S] = foldIso((f, g) => Optic.iso(g, f))
-    def ofrom(b: B): T = self.flipIso.oview(b)
+  implicit class LensLikeSyntax[C[_[_]], S, T, A, B](self: LensLike[C, S, T, A, B]) {
+    def overF[F[_]](s: S, f: A => F[B])(implicit F: Inst[C[F]]): F[T] = self.transform[Function1, F](f).apply(s)
   }
 
-  implicit class LensLikeSyntax[C[_[_]], S, T, A, B](self: LensLike[C, S, T, A, B]) {
-    def ooverF[F[_]](s: S, f: A => F[B])(implicit F: Inst[C[F]]): F[T] = self.transform[Function1, F](f).apply(s)
+  implicit class EqualitySyntax[S, T, A, B](self: Equality[S, T, A, B]) {
+    def subst[F[_]](x: F[A]): F[S] = {
+      type P[X, Y] = F[X]
+      self.transform[P, F](x)
+    }
+
+    def flipEq: Equality[B, A, T, S] = {
+      type P[X, Y] = Equality[B, A, Y, X]
+      self.transform[P, Id](Optic.id)
+    }
+  }
+
+  implicit class IsoSyntax[S, T, A, B](self: Iso[S, T, A, B]) {
+    def toIso: Iso[S, T, A, B] = self
+
+    def isoPair: (S => A, B => T) = {
+      type P[X, Y] = (X => A, B => Y)
+      def pProfunctor: Profunctor[P] = new Profunctor[P] {
+        def dimap[A0, B0, C, D](p: (A0 => A, B => B0))(f: C => A0, g: B0 => D): (C => A, B => D) =
+          p.bimap(_.compose(f), _.andThen(g))
+      }
+      self.explicitTransform[P, Id]((identity, identity), pProfunctor, IdentityAlias.idFunctor)
+    }
+
+    def foldIso[R](f: (S => A, B => T) => R): R = f.tupled(isoPair)
+
+    def flipIso: Iso[B, A, T, S] = foldIso((f, g) => Optic.iso(g, f))
+  }
+
+  implicit class PrismSyntax[S, T, A, B](self: Prism[S, T, A, B]) {
+    def toPrism: Prism[S, T, A, B] = self
+
+    def prismPair: (B => T, S => Either[T, A]) = {
+      type P[X, Y] = (B => Y, X => Either[Y, A])
+      def pChoice = new Choice[P] {
+        def dimap[A0, B0, C, D](p: (B => B0, A0 => Either[B0, A]))(f: C => A0, g: B0 => D): (B => D, C => Either[D, A]) =
+          p.bimap(_.andThen(g), _.dimap(f, _.leftMap(g)))
+        def left[A0, B0, C](p: (B => B0, A0 => Either[B0, A])): (B => Either[B0,C], Either[A0,C] => Either[Either[B0, C], A]) =
+          p.bimap(_.andThen(_.left), f => _.leftMap(f) match {
+                    case Right(a) => Left(Right(a))
+                    case Left(Right(c)) => Right(c)
+                    case Left(Left(b)) => Left(Left(b))
+                  })
+        def right[A0, B0, C](p: (B => B0, A0 => Either[B0, A])): (B => Either[C, B0], Either[C, A0] => Either[Either[C, B0], A]) =
+          p.bimap(_.andThen(_.right), f => _.map(f) match {
+                    case Left(c) => Left(Left(c))
+                    case Right(Left(b)) => Left(Right(b))
+                    case Right(Right(a)) => Right(a)
+                  })
+      }
+      self.explicitTransform[P, Id]((identity, _.right), pChoice, IdentityAlias.idFunctor)
+    }
+
+    def matching(s: S): Either[T, A] = prismPair._2(s)
+  }
+
+  implicit class ReviewSyntax[S, T, A, B](self: Review[S, T, A, B]) {
+    def toReview: Review[S, T, A, B] = self
+
+    def review(b: B): T = {
+      type P[X, Y] = Y
+      def pChoiceBifunctor = new ChoiceBifunctor[P] {
+        def dualmap[A0, B0, C0, D0](p: B0)(f: B0 => D0): D0 = f(p)
+      }
+      self.explicitTransform[P, Id](b, pChoiceBifunctor, IdentityAlias.idFunctor)
+    }
   }
 
   implicit class SetterSyntax[S, T, A, B](self: Setter[S, T, A, B]) {
-    def oover(s: S)(f: A => B): T = self.ooverF(s, f.andThen(Identity(_))).run
-    def oset(s: S, x: B): T = oover(s)(_ => x)
+    def toSetter: Setter[S, T, A, B] = self
+    def over(s: S)(f: A => B): T = self.overF(s, f.andThen(Identity(_))).run
+    def set(s: S, x: B): T = over(s)(_ => x)
   }
 
   implicit class GetterSyntax[S, T, A, B](self: Getter[S, T, A, B]) {
-    def oview(s: S): A = self.ooverF[Const[A, ?]](s, Const(_)).runConst
+    def toGetter: Getter[S, T, A, B] = self
+    def view(s: S): A = self.overF[Const[A, ?]](s, Const(_)).runConst
+  }
+
+  implicit class GetterLikeSyntax[C[F[_]] <: Phantom[F], S, T, A, B](self: LensLike[C, S, T, A, B]) {
+    def getting: LensLike_[C, S, A] = new _LensLike[C, S, S, A, A] {
+      def overF[F[_]](f: A => F[A])(s: S)(implicit F: Inst[C[F]]): F[S] = {
+        implicit val phantomF: IPhantom[F] = F.widen
+        self.overF[F](s, f.andThen(_.phantommap)).phantommap
+      }
+    }.optic
+  }
+
+  implicit class FoldSyntax[S, T, A, B](self: Fold[S, T, A, B]) {
+    def toFold: Fold[S, T, A, B] = self
+  }
+
+  implicit class TraversalSyntax[S, T, A, B](self: Traversal[S, T, A, B]) {
+    def toTraversal: Traversal[S, T, A, B] = self
+  }
+
+  implicit class LensSyntax[S, T, A, B](self: Lens[S, T, A, B]) {
+    def toLens: Lens[S, T, A, B] = self
   }
 
   def fst[A, B, C]: Lens[(A, C), (B, C), A, B] = lens(_._1, x => _.copy(_1 = x))
@@ -109,60 +206,44 @@ object Optic {
 trait OpticModule {
   type Equality[S, T, A, B] = Optic[Any2, Any1, S, T, A, B]
   type Iso[S, T, A, B] = Optic[Profunctor, Functor, S, T, A, B]
-  type AnIso[S, T, A, B] = Optic[Profunctor, IdFunctor, S, T, A, B]
   type Prism[S, T, A, B] = Optic[Choice, Applicative, S, T, A, B]
+  type Review[S, T, A, B] = Optic[ChoiceBifunctor, IdFunctor, S, T, A, B]
   type LensLike[-C[_[_]], S, T, A, B] = Optic[IsFn, C, S, T, A, B]
-  type Getting[R, S, T, A, B] = LensLike[ConstFunctor[R, ?[_]], S, T, A, B]
-  type Getter[S, T, A, B] = LensLike[Phantom, S, T, A, B]
-  type Setter[S, T, A, B] = LensLike[IdFunctor, S, T, A, B]
-  type Fold[S, T, A, B] = LensLike[Contrapplicative, S, T, A, B]
-  type Traversal[S, T, A, B] = LensLike[Applicative, S, T, A, B]
   type Lens[S, T, A, B] = LensLike[Functor, S, T, A, B]
+  type Traversal[S, T, A, B] = LensLike[Applicative, S, T, A, B]
+  type Getter[S, T, A, B] = LensLike[Phantom, S, T, A, B]
+  type Getting[R, S, T, A, B] = LensLike[ConstFunctor[R, ?[_]], S, T, A, B]
+  type Fold[S, T, A, B] = LensLike[Contrapplicative, S, T, A, B]
+  type Setter[S, T, A, B] = LensLike[IdFunctor, S, T, A, B]
 
   type Optic_[PC[_[_, _]], FC[_[_]], S, A] = Optic[PC, FC, S, S, A, A]
   type Equality_[S, A] = Equality[S, S, A, A]
   type Iso_[S, A] = Iso[S, S, A, A]
-  type AnIso_[S, A] = AnIso[S, S, A, A]
   type Prism_[S, A] = Prism[S, S, A, A]
+  type Review_[S, A] = Review[S, S, A, A]
   type LensLike_[-C[_[_]], S, A] = LensLike[C, S, S, A, A]
+  type Lens_[S, A] = Lens[S, S, A, A]
   type Getting_[R, S, A] = Getting[R, S, S, A, A]
   type Getter_[S, A] = Getter[S, S, A, A]
   type Setter_[S, A] = Setter[S, S, A, A]
   type Fold_[S, A] = Fold[S, S, A, A]
   type Traversal_[S, A] = Traversal[S, S, A, A]
-  type Lens_[S, A] = Lens[S, S, A, A]
 
-  implicit class OpticSyntax0[S](self: S) {
-    def overF[C[_[_]], F[_], T, A, B](f: A => F[B])(o: LensLike[C, S, T, A, B])(implicit F: Inst[C[F]]): F[T] = o.ooverF(self, f)
+  implicit class OpticSyntax0_[S](self: S) {
+    def ooverF[C[_[_]], F[_], T, A, B](f: A => F[B])(o: LensLike[C, S, T, A, B])(implicit F: Inst[C[F]]): F[T] = o.overF(self, f)
 
-    def moverF[C[_[_]], F[_], A](f: A => F[A])(o: LensLike_[C, S, A])(implicit F: Inst[C[F]]): F[S] = o.ooverF(self, f)
-
-    def poverF[C[_[_]], F[_], T, A, B]
-      (proxy: LensLike_[C, S, A])(f: A => F[B])(o: LensLike[C, S, T, A, B])(implicit F: Inst[C[F]]): F[T] = o.ooverF(self, f)
-
-    def overF1[C[_[_]], F[_], T, A, B](o: LensLike[C, S, T, A, B])(f: A => F[B])(implicit F: Inst[C[F]]): F[T] = o.ooverF(self, f)
+    def moverF[C[_[_]], F[_], A](f: A => F[A])(o: LensLike_[C, S, A])(implicit F: Inst[C[F]]): F[S] = o.overF(self, f)
 
     /** Polymorphic over. Can't infer the argument type of the function. */
-    def over[T, A, B](f: A => B)(o: Setter[S, T, A, B]): T = o.oover(self)(f)
+    def oover[T, A, B](f: A => B)(o: Setter[S, T, A, B]): T = o.over(self)(f)
+
+    def oover1[T, A, B](o: Setter[S, T, A, B])(f: A => B): T = o.over(self)(f)
 
     /** Monomorphic over. Has better inference; can infer A. */
-    def mover[T, A, B](o: Setter_[S, A])(f: A => A): S = o.oover(self)(f)
+    def mover[T, A, B](o: Setter_[S, A])(f: A => A): S = o.over(self)(f)
 
-    /** Polymorphic over, where a monomorphic version of the setter is also passed as a proxy to aid type inference.
-      Can allow A to be inferred. For example, the following type checks:
-        ((3, 2), 5).pover(fst.compose(snd))(_.toString)(fst.compose(snd))
-      Though it may just be easier to add a type annotation:
-        ((3, 2), 5).over((_:Int).toString)(fst.compose(snd))
-    */
-    def pover[T, A, B](proxy: Setter[S, S, A, A])(f: A => B)(o: Setter[S, T, A, B]): T = o.oover(self)(f)
+    def oset[T, A, B](x: B)(o: Setter[S, T, A, B]): T = o.set(self, x)
 
-    /** Behaves the same as mover when passed a monomorphic setter. May be useless. */
-    def over1[T, A, B](o: Setter[S, T, A, B])(f: A => B): T = o.oover(self)(f)
-
-    def set[T, A, B](x: B)(o: Setter[S, T, A, B]): T = o.oset(self, x)
-
-    def view[T, A, B](o: Getter[S, T, A, B]): A = o.oview(self)
-
-    def from[T, A, B](o: AnIso[B, A, T, S]): A = o.ofrom(self)
+    def oview[T, A, B](o: Getter[S, T, A, B]): A = o.view(self)
   }
 }

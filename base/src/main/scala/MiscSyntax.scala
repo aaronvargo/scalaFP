@@ -20,7 +20,10 @@ trait MiscSyntax {
   }
 
   implicit class Syntax2[P[_, _], A, B](self: P[A, B]) {
+    def bimap[C, D](f: A => C, g: B => D)(implicit P: IBifunctor[P]) = P.run.bimap(self)(f, g)
     def dimap[C, D](f: C => A, g: B => D)(implicit P: IProfunctor[P]): P[C, D] = P.run.dimap(self)(f, g)
+    def dualmap[C, D](f: B => D)(implicit P: IChoiceBifunctor[P]): P[C, D] = P.run.dualmap(self)(f)
+    def leftMap[C](f: A => C)(implicit P: ILeft1[Functor, P]): P[C, B] = P.run.leftInstance.map(self)(f)
     def choiceleft[C](implicit P: IChoice[P]): P[Either[A, C], Either[B, C]] = P.run.left(self)
     def choiceright[C](implicit P: IChoice[P]): P[Either[C, A], Either[C, B]] = P.run.right(self)
     def toFn(implicit P: IIsFn[P]): A => B = P.run.toFn(self)

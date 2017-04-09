@@ -1,14 +1,12 @@
 package scalaFP
 
-trait ScalaFP
+trait Base
     extends BaseHierarchy
     with InstModule
     with IdentityModule
     with ConstModule
-    with ExchangeModule
-    with IsFnModule
     with OpticModule
-    with MonadReaderModule
+    with StdModule
     with MiscSyntax {
 
   type IAny1[F[_]] = Inst[Any1[F]]
@@ -26,9 +24,13 @@ trait ScalaFP
   type IIdFunctor[F[_]] = Inst[IdFunctor[F]]
 
   type IAny2[P[_, _]] = Inst[Any2[P]]
+  type IRight1[C[_[_]], P[_, _]] = Inst[Right1[C, P]]
+  type ILeft1[C[_[_]], P[_, _]] = Inst[Left1[C, P]]
+  type IBifunctor[P[_, _]] = Inst[Bifunctor[P]]
   type IProfunctor[P[_, _]] = Inst[Profunctor[P]]
   type IChoice[P[_, _]] = Inst[Choice[P]]
   type IIsFn[P[_, _]] = Inst[IsFn[P]]
+  type IChoiceBifunctor[P[_, _]] = Inst[ChoiceBifunctor[P]]
 
   type ===[A, B] = Inst[Equality_[A, B]]
 }

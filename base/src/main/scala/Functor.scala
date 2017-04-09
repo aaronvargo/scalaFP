@@ -1,7 +1,8 @@
 package scalaFP
 
 trait Functor[F[_]] extends Any1[F] with Functor.Map[F] with Functor.MapConst[F] {
-  def mapConst[A, B](fa: F[A], x: B): F[B] = map(fa)(_ => x)
+  override def map[A, B](fa: F[A])(f: A => B): F[B]
+  override def mapConst[A, B](fa: F[A], x: B): F[B] = map(fa)(_ => x)
 }
 
 object Functor {
@@ -17,7 +18,7 @@ object Functor {
 
   trait From[F[_]] extends Functor[F]  {
     def functorDelegate: Functor[F]
-    def map[A, B](fa: F[A])(f: A => B) = functorDelegate.map(fa)(f)
+    override def map[A, B](fa: F[A])(f: A => B) = functorDelegate.map(fa)(f)
     override def mapConst[A, B](fa: F[A], x: B): F[B] = functorDelegate.mapConst(fa, x)
   }
 
@@ -36,4 +37,3 @@ object Functor {
     override def map[A, B](fa: F[A])(f: A => B): F[B] = _map.map(fa)(f)
   }
 }
-

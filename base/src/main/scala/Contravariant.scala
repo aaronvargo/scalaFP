@@ -9,6 +9,6 @@ object Contravariant {
 
   trait From[F[_]] extends Contravariant[F] {
     def contravariantDelegate: Contravariant[F]
-    def contramap[A, B](fa: F[A])(f: B => A): F[B] = contravariantDelegate.contramap(fa)(f)
+    override def contramap[A, B](fa: F[A])(f: B => A): F[B] = contravariantDelegate.contramap(fa)(f)
   }
 }

@@ -7,8 +7,7 @@ object Contrapplicative {
 
   trait From[F[_]] extends Phantom.From[F] with Applicative.From[F] {
     def contrapplicativeDelegate: Contrapplicative[F]
-    def phantomDelegate = contrapplicativeDelegate
-    def applicativeDelegate = contrapplicativeDelegate
-    override def functorDelegate = contrapplicativeDelegate
+    override def phantomDelegate: Phantom[F] = contrapplicativeDelegate
+    override def applicativeDelegate: Applicative[F] = contrapplicativeDelegate
   }
 }

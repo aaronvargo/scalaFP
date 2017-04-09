@@ -14,7 +14,7 @@ object ConstAlias extends ConstNewtype {
   def run[A, B](a: A): A = a
   def coerce[S, T, A, B]: Equality[S, T, S, T] = Optic.id
   def constFunctor[V]: IConstFunctor[V, Const[V, ?]] =
-    Inst(new ConstFunctor.FromRunMk[V, Const[V, ?]] {
+    Inst(new ConstFunctor[V, Const[V, ?]] {
            def mkConst[A](v: V): V = v
            def runConst[A](x: V): V = x
          })

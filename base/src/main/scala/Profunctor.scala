@@ -1,14 +1,15 @@
 package scalaFP
 
-trait Profunctor[P[_, _]] extends Any2[P] {
+trait Profunctor[P[_, _]] extends Right1[Functor, P] with Left1[Contravariant, P] {
   def dimap[A, B, C, D](p: P[A, B])(f: C => A, g: B => D): P[C, D]
 
-  def functor[A]: Functor[P[A, ?]] = new Functor[P[A, ?]] {
-    def map[B, C](p: P[A, B])(f: B => C): P[A, C] = rmap(p)(f)
+  override def rightInstance[A]: Functor[P[A, ?]] = new Functor[P[A, ?]] {
+    def map[B, C](p: P[A, B])(f: B => C): P[A, C] = dimap(p)(identity, f)
   }
 
-  def lmap[A, B, C](p: P[A, B])(f: C => A): P[C, B] = dimap(p)(f, identity)
-  def rmap[A, B, C](p: P[A, B])(f: B => C): P[A, C] = dimap(p)(identity, f)
+  override def leftInstance[A]: Contravariant[P[?, A]] = new Contravariant[P[?, A]] {
+    override def contramap[B, C](p: P[B, A])(f: C => B): P[C, A] = dimap(p)(f, identity)
+  }
 }
 
 object Profunctor {
@@ -16,17 +17,14 @@ object Profunctor {
 
   trait From[P[_, _]] extends Profunctor[P] {
     def profunctorDelegate: Profunctor[P]
-    def dimap[A, B, C, D](p: P[A, B])(f: C => A, g: B => D): P[C, D] = profunctorDelegate.dimap(p)(f, g)
-    override def functor[A]: Functor[P[A, ?]] = profunctorDelegate.functor
-    override def lmap[A, B, C](p: P[A, B])(f: C => A): P[C, B] = profunctorDelegate.lmap(p)(f)
-    override def rmap[A, B, C](p: P[A, B])(f: B => C): P[A, C] = profunctorDelegate.rmap(p)(f)
+    override def dimap[A, B, C, D](p: P[A, B])(f: C => A, g: B => D): P[C, D] = profunctorDelegate.dimap(p)(f, g)
+    override def rightInstance[A]: Functor[P[A, ?]] = profunctorDelegate.rightInstance
+    override def leftInstance[A]: Contravariant[P[?, A]] = profunctorDelegate.leftInstance
   }
 
-  trait FromFunctorLMap[P[_, _]] extends Profunctor[P] {
-    override def functor[A]: Functor[P[A, ?]]
-    override def lmap[A, B, C](p: P[A, B])(f: C => A): P[C, B]
-
-    def dimap[A, B, C, D](p: P[A, B])(f: C => A, g: B => D): P[C, D] = functor.map(lmap(p)(f))(g)
-    override def rmap[A, B, C](p: P[A, B])(f: B => C): P[A, C] = functor.map(p)(f)
+  trait FromLeftRight[P[_, _]] extends Profunctor[P] {
+    override def leftInstance[A]: Contravariant[P[?, A]]
+    override def rightInstance[A]: Functor[P[A, ?]]
+    def dimap[A, B, C, D](p: P[A, B])(f: C => A, g: B => D): P[C, D] = rightInstance.map(leftInstance.contramap(p)(f))(g)
   }
 }

@@ -10,8 +10,8 @@ object Choice {
 
   trait From[P[_, _]] extends Choice[P] with Profunctor.From[P] {
     def choiceDelegate: Choice[P]
-    def profunctorDelegate = choiceDelegate
-    def left[A, B, C](fa: P[A, B]): P[Either[A, C], Either[B, C]] = choiceDelegate.left(fa)
-    def right[A, B, C](fa: P[A, B]): P[Either[C, A], Either[C, B]] = choiceDelegate.right(fa)
+    override def profunctorDelegate: Profunctor[P] = choiceDelegate
+    override def left[A, B, C](fa: P[A, B]): P[Either[A, C], Either[B, C]] = choiceDelegate.left(fa)
+    override def right[A, B, C](fa: P[A, B]): P[Either[C, A], Either[C, B]] = choiceDelegate.right(fa)
   }
 }
