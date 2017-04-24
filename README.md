@@ -8,7 +8,7 @@ An experimental modern FP library in Scala, currently featuring:
 
 Additional minor things:
 - `Profunctor[P]` implies `Functor[P[A, ?]]`, forall A
-- Naperian (A stronger version of Distributive, equivalent to Representable) functors and logarithm types
+- `Naperian` (A stronger version of `Distributive`, equivalent to `Representable`) functors and logarithm types
 
 # Typeclass Encoding
 
@@ -23,7 +23,7 @@ trait Bind[F[_]] {
 }
 ~~~
 
-The `@typeclass` is a macro combines the `caseclassy` and `classyLenses` macros
+The `typeclass` macro combines the `caseclassy` and `classyLenses` macros
 together, and generates the following:
 
 ~~~scala
@@ -64,14 +64,14 @@ object Bind {
 ~~~
 
 The first thing to note is that it generates a trait for each def. This allows
-lenses to be defined for each method, which is otherwise impossible since scala
-doesn't have first class higher-rank types, much less impredicative types. It
-then converts the typeclass to a case class. An apply method is added as syntax
-to each method-trait. Giving the original methods different names, and only
-adding apply as syntax, allows the traits to be mixed together for convenience,
-as shown later.
+lenses to be defined for each method. It then converts the typeclass to a case
+class. 
 
-The next thing to note is that it generates both a non-classy and classy lens
+An apply method is also added as syntax to each method-trait. Giving the
+original methods different names, and only adding apply as syntax, allows the
+traits to be mixed together for convenience, as shown later.
+
+The next thing to note is that it generates both non-classy and classy lenses
 for each field. The non-classy lenses should probably be removed, but I haven't
 done that yet. The classy lenses make use of the `Has` typeclass, and will work
 with any "subclass" of the typeclass. Their primary purpose is to allow
@@ -79,8 +79,8 @@ overriding of methods, via set.
 
 ## Typeclass Hierarchy and the Has Typeclass
 
-To make `Bind` a "subclass" of `Apply`, we also need to add following implicits
-to the [scato](https://github.com/aloiscochard/scato)-style hierarchy:
+To make `Bind` a "subclass" of `Apply`, the following implicits also need to be
+added to the [scato](https://github.com/aloiscochard/scato)-style hierarchy:
 
 ~~~scala
 implicit def bindApply[F[_]](implicit e: Bind[F]): Apply[F] = e.toApply
