@@ -14,9 +14,15 @@ scalacOptions in ThisBuild ++= Seq(
 )
 
 lazy val meta = (project in file("meta")).settings(
-  libraryDependencies += "org.scala-lang" % "scala-reflect" % scalaVersion.value
+  libraryDependencies ++= Seq(
+    "org.scala-lang" % "scala-reflect" % scalaVersion.value,
+    compilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
+  )
 )
 
 lazy val base = (project in file("base")).settings(
-  libraryDependencies += compilerPlugin("org.spire-math" %% "kind-projector" % "0.9.3")
+  libraryDependencies ++= Seq(
+    compilerPlugin("org.spire-math" %% "kind-projector" % "0.9.3"),
+    compilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
+  )
 ) dependsOn meta

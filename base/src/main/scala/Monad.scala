@@ -1,23 +1,31 @@
 package scalaFP
 
-trait Monad[F[_]] extends Applicative[F] with Bind[F] {
-  override def pure[A](a: A): F[A]
-  override def bind[A, B](fa: F[A])(f: A => F[B]): F[B]
-  override def map[A, B](fa: F[A])(f: A => B): F[B] = bind(fa)(f.andThen(pure))
+@meta.typeclass
+trait Monad[F[_]] {
+  val toBind: Bind[F]
+  val toApplicative: Applicative[F]
 }
 
 object Monad {
-  def apply[F[_]](implicit e: IMonad[F]) = e.run
 
-  trait From[F[_]] extends Monad[F] with Applicative.From[F] with Bind.From[F] {
-    def monadDelegate: Monad[F]
-    override def bindDelegate: Bind[F] = monadDelegate
-    override def applicativeDelegate: Applicative[F] = monadDelegate
+  def diamondBind[F[_], A: Has[Monad[F], ?]]: Lens_[A, Bind[F]] =
+    Lens.diamond[Apply[F]](toBind, toApplicative)
+
+  def diamondApplicative[F[_], A: Has[Monad[F], ?]]: Lens_[A, Applicative[F]] =
+    Lens.diamond[Apply[F]](toApplicative, toBind)
+
+  def fromToBindPure[F[_]](bind: Bind[F], pure: Applicative._Pure[F]): Monad[F] =
+    Monad(bind, Applicative(pure, bind.toApply))
+
+  def fromBindPure[F[_]](bind: Bind._Bind[F], pure: Applicative._Pure[F]): Monad[F] = {
+    val x = new Functor._Map[F] {
+      def map[A, B](fa: F[A])(f: A => B): F[B] = bind(fa)(f.andThen(pure.apply))
+    }
+    fromToBindPure(Bind.fromBindMap(bind, x), pure)
   }
 
-  trait FromJoin[F[_]] extends Monad[F] with Bind.FromJoin[F] {
-    override def pure[A](a: A): F[A]
-    override def map[A, B](fa: F[A])(f: A => B): F[B]
-    override def join[A, B](fa: F[F[A]]): F[A]
+  def fromPureMapJoin[F[_]](pure: Applicative._Pure[F], map: Functor._Map[F], join: Bind._Join[F]): Monad[F] = {
+    fromToBindPure(Bind.fromJoinMap(join, map), pure)
   }
+
 }

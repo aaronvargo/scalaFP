@@ -1,46 +1,51 @@
 package scalaFP
 
-trait BaseHierarchy extends BaseHierarchy.BH
+trait BaseHierarchy extends BaseHierarchy.BH0
 
 object BaseHierarchy {
-  trait BH extends BH0 {
-    implicit def rightInstance[C[_[_]], P[_, _], A](implicit e: IRight1[C, P]): Inst[C[P[A, ?]]] = Inst(e.run.rightInstance)
-
-    /* TODO repeat entire hierarchy for Right and Left?
-       IRight[Apply] => IRight[Functor], etc?
-    */
-
-    //TODO Find a way to add default instances such as (Bind, Applicative) => Monad
-  }
   trait BH0 extends BH1 {
-    implicit def equalityInst[A]: A === A = Inst(Optic.id)
-    implicit def any1[F[_]]: IAny1[F] = Inst(new Any1[F]{})
-    implicit def any2[P[_, _]]: IAny2[P] = Inst(new Any2[P]{})
-    implicit def applyFunctor[F[_]](implicit e: IApply[F]): IFunctor[F] = e.widen
-    implicit def applicativeApply[F[_]](implicit e: IApplicative[F]): IApply[F] = e.widen
-    implicit def monadApplicative[F[_]](implicit e: IMonad[F]): IApplicative[F] = e.widen
-    implicit def monadBind[F[_]](implicit e: IMonad[F]): IBind[F] = e.widen
-    implicit def idfunctorMonad[S, F[_]](implicit e: IIdFunctor[F]): IMonad[F] = e.widen
-    implicit def phantomContravariant[F[_]](implicit e: IPhantom[F]): IContravariant[F] = e.widen
-    implicit def contrapplicativePhantom[F[_]](implicit e: IContrapplicative[F]): IPhantom[F] = e.widen
-    implicit def choiceProfunctor[P[_, _]](implicit e: IChoice[P]): IProfunctor[P] = e.widen
-    implicit def isFnChoice[P[_, _]](implicit e: IIsFn[P]): IChoice[P] = e.widen
-    implicit def profunctorRight[P[_, _]](implicit e: IProfunctor[P]): IRight1[Functor, P] = e.widen
-    implicit def profunctorLeft[P[_, _]](implicit e: IProfunctor[P]): ILeft1[Contravariant, P] = e.widen
-    implicit def choiceBifunctorBifunctor[P[_, _]](implicit e: IChoiceBifunctor[P]): IBifunctor[P] = e.widen
+    implicit def applyFunctor[F[_]](implicit e: Apply[F]): Functor[F] = e.toFunctor
+    implicit def hasApplyFunctor[F[_], A](implicit e: Has[Apply[F], A]): Has[Functor[F], A] =
+      e.upcast(Apply.toFunctor)
+
+    implicit def applicativeApply[F[_]](implicit e: Applicative[F]): Apply[F] = e.toApply
+    implicit def hasApplicativeApply[F[_], A](implicit e: Has[Applicative[F], A]): Has[Apply[F], A] =
+      e.upcast(Applicative.toApply)
+
+    implicit def monadApplicative[F[_]](implicit e: Monad[F]): Applicative[F] = e.toApplicative
+    implicit def hasMonadApplicative[F[_], A](implicit e: Has[Monad[F], A]): Has[Applicative[F], A] =
+      e.upcast(Monad.diamondApplicative)
+
+    implicit def monadBind[F[_]](implicit e: Monad[F]): Bind[F] = e.toBind
+    implicit def hasMonadBind[F[_], A](implicit e: Has[Monad[F], A]): Has[Bind[F], A] =
+      e.upcast(Monad.diamondBind)
+
+    implicit def naperianMonad[F[_]](implicit e: Naperian[F]): Monad[F] = e.toMonad
+    implicit def hasNaperianMonad[F[_], A](implicit e: Has[Naperian[F], A]): Has[Monad[F], A] =
+      e.upcast(Naperian.toMonad)
+
+    implicit def strongProfunctor[P[_, _]](implicit e: Strong[P]): Profunctor[P] = e.toProfunctor
+    implicit def hasStrongProfunctor[P[_, _], A](implicit e: Has[Strong[P], A]): Has[Profunctor[P], A] =
+      e.upcast(Strong.toProfunctor)
+
   }
   trait BH1 extends BH2 {
-    implicit def phantomFunctor[F[_]](implicit e: IPhantom[F]): IFunctor[F] = e.widen
-    implicit def bindApply[F[_]](implicit e: IBind[F]): IApply[F] = e.widen
-    implicit def contrapplicativeApplicative[F[_]](implicit e: IContrapplicative[F]): IApplicative[F] = e.widen
-    implicit def monadReaderMonad[S, F[_]](implicit e: IMonadReader[S, F]): IMonad[F] = e.widen
-    implicit def constFunctorPhantom[S, F[_]](implicit e: IConstFunctor[S, F]): IPhantom[F] = e.widen
-    implicit def bifunctorRight[P[_, _]](implicit e: IBifunctor[P]): IRight1[Functor, P] = e.widen
-    implicit def bifunctorLeft[P[_, _]](implicit e: IBifunctor[P]): ILeft1[Functor, P] = e.widen
-    implicit def choiceBifunctorChoice[P[_, _]](implicit e: IChoiceBifunctor[P]): IChoice[P] = e.widen
-    implicit def choiceBifunctorLeft[P[_, _]](implicit e: IChoiceBifunctor[P]): ILeft1[Phantom, P] = e.widen
+    implicit def profunctorFunctor[P[_, _], A](implicit e: Profunctor[P]): Functor[P[A, ?]] =
+      e.rightFunctor.apply
+
+    //TODO add To class which is weaker than Has, and implement To[Profunctor] => To[Functor[P[A, ?]]]
+
+    implicit def bindApply[F[_]](implicit e: Bind[F]): Apply[F] = e.toApply
+    implicit def hasBindApply[F[_], A](implicit e: Has[Bind[F], A]): Has[Apply[F], A] =
+      e.upcast(Bind.toApply)
+
+    implicit def choiceProfunctor[P[_, _]](implicit e: Choice[P]): Profunctor[P] = e.toProfunctor
+    implicit def hasChoiceProfunctor[P[_, _], A](implicit e: Has[Choice[P], A]): Has[Profunctor[P], A] =
+      e.upcast(Choice.toProfunctor)
   }
   trait BH2 {
-    implicit def monadErrorMonad[S, F[_]](implicit e: IMonadError[S, F]): IMonad[F] = e.widen
+    implicit def closedProfunctor[P[_, _]](implicit e: Closed[P]): Profunctor[P] = e.toProfunctor
+    implicit def hasClosedProfunctor[P[_, _], A](implicit e: Has[Closed[P], A]): Has[Profunctor[P], A] =
+      e.upcast(Closed.toProfunctor)
   }
 }

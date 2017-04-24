@@ -1,33 +1,16 @@
 package scalaFP
 
-trait ConstNewtype {
-  type Const[A, B]
-  def apply[A, B](a: A): Const[A, B]
-  def run[A, B](a: Const[A, B]): A
-  def coerce[S, T, A, B]: Equality[Const[S, A], Const[T, B], S, T]
-  def constFunctor[V]: IConstFunctor[V, Const[V, ?]]
-}
-
-object ConstAlias extends ConstNewtype {
+@meta.newtype
+object ConstType {
   type Const[A, B] = A
-  def apply[A, B](a: A): A = a
-  def run[A, B](a: A): A = a
-  def coerce[S, T, A, B]: Equality[S, T, S, T] = Optic.id
-  def constFunctor[V]: IConstFunctor[V, Const[V, ?]] =
-    Inst(new ConstFunctor[V, Const[V, ?]] {
-           def mkConst[A](v: V): V = v
-           def runConst[A](x: V): V = x
-         })
-  val Newtype: ConstNewtype = this
+  def functor[S]: Functor[Const[S, ?]] = {
+    val x = new Functor._Map[Const[S, ?]] {
+      def map[A, B](fa: Const[S, A])(f: A => B): Const[S, B] = fa
+    }
+    Functor.fromMap[Const[S, ?]](x)
+  }
 }
 
-trait ConstModule {
-  val Const: ConstAlias.Newtype.type = ConstAlias.Newtype
-  type Const[A, B] = Const.Const[A, B]
-
-  implicit def constConstFunctor[V]: IConstFunctor[V, Const[V, ?]] = Const.constFunctor
-
-  implicit class ConstSyntax[A, B](self: Const[A, B]) {
-    def run: A = Const.run(self)
-  }
+trait ConstModule extends ConstType.TopLevel {
+  implicit def constFunctor[S]: Functor[Const[S, ?]] = Const.functor[S]
 }

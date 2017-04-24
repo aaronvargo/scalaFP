@@ -1,47 +1,194 @@
-Experiments in modern FP library design in Scala, including:
+An experimental modern FP library in Scala, currently featuring:
 
-- [scato](https://github.com/aloiscochard/scato) style typeclasses, but which still utilize inheritance
-- coercible newtypes, based on the tagged type trick found in scalaz
-- [lens](https://hackage.haskell.org/package/lens) style optics, based on variance-induced subtyping
+- subtyping-and-inheritance-free typeclasses, defined as case classes where
+  members can be overridden using lenses.
+- coercible newtypes, based on the tagged-type trick
+- macros to generate boilerplate associated with the above two features
+- optics. The design will probably be changed later, to not use inheritance.
 
-Here's a list of some interesting things to look at:
+Additional minor things:
+- `Profunctor[P]` implies `Functor[P[A, ?]]`, forall A
+- Naperian (A stronger version of Distributive, equivalent to Representable) functors and logarithm types
 
-- [Newtypes are encoded with the tagged-type trick](https://github.com/aaronvargo/scalaFP/blob/master/base/src/main/scala/Const.scala)
+# Typeclass Encoding
 
-- The `Inst` newtype, which is equivalent to the Identity newtype, is
-used to remove subtyping between typeclasses, so that a scato-style encoding can
-be used. Since `Inst` is invariant, `Inst[Monad[F]]` and `Inst[Applicative[F]]`
-(aliased to `IMonad[F]` and `IApplicative[F]` respectively), for example, have
-no subtype relation, even though `Monad[F]` is defined as a subtype of `Applicative[F]`
+The `Bind` class is defined as follows:
 
-- `IProfunctor[P]` implies `IFunctor[P[A, ?]]`, forall A
+~~~scala
+@meta.typeclass
+trait Bind[F[_]] {
+  def bind[A, B](fa: F[A])(f: A => F[B]): F[B]
+  def join[A](ffa: F[F[A]]): F[A]
+  val toApply: Apply[F]
+}
+~~~
 
-- lens style optics are all encoded in terms of a single type:
+The `@typeclass` is a macro combines the `caseclassy` and `classyLenses` macros
+together, and generates the following:
 
-  ~~~scala
-  abstract class Optic[-PC[_[_, _]], -FC[_[_]], S, T, A, B] {
-    def explicitTransform[P[_, _], F[_]](f: P[A, F[B]], P: PC[P], F: FC[F]): P[S, F[T]]
+~~~scala
+case class Bind[F[_]](bind: Bind._Bind[F], join: Bind._Join[F], toApply: Apply[F])
+
+object Bind {
+
+  trait _Bind[F[_]] {
+    def bind[A, B](fa: F[A])(f: A => F[B]): F[B]
   }
-  
-  type Equality[S, T, A, B] = Optic[Any2, Any1, S, T, A, B]
-  type Iso[S, T, A, B] = Optic[Profunctor, Functor, S, T, A, B]
-  type Prism[S, T, A, B] = Optic[Choice, Applicative, S, T, A, B]
-  type Review[S, T, A, B] = Optic[ChoiceBifunctor, IdFunctor, S, T, A, B]
-  type LensLike[-C[_[_]], S, T, A, B] = Optic[IsFn, C, S, T, A, B]
-  type Lens[S, T, A, B] = LensLike[Functor, S, T, A, B]
-  type Traversal[S, T, A, B] = LensLike[Applicative, S, T, A, B]
-  type Getter[S, T, A, B] = LensLike[Phantom, S, T, A, B]
-  type Getting[R, S, T, A, B] = LensLike[ConstFunctor[R, ?[_]], S, T, A, B]
-  type Fold[S, T, A, B] = LensLike[Contrapplicative, S, T, A, B]
-  type Setter[S, T, A, B] = LensLike[IdFunctor, S, T, A, B]
-  ~~~
 
-  The proper subtype relations between these types fall out of the
-  contravariance of PC and FC. This makes it possible to, for example, have a
-  single implementation of compose which (mostly) just does the right thing, as in
-  the lens library.
+  object _Bind {
+    implicit class Syntax[F[_]](val self: _Bind[F]) {
+      def apply[A, B](fa: F[A])(f: A => F[B]): F[B] = self.bind[A, B](fa)(f)
+    }
+  }
 
-- [It's not too hard to define lenses for typeclasses](https://github.com/aaronvargo/scalaFP/blob/master/base/src/main/scala/Apply.scala),
-though I'm not sure how useful they are. But in any case, though typeclasses are
-defined with inheritance, it's also possible to construct them using composition
-and value level functions.
+  trait _Join[F[_]] {
+    def join[A](ffa: F[F[A]]): F[A]
+  }
+
+  object _Join {
+    implicit class Syntax[F[_]](val self: _Join[F]) {
+      def apply[A](ffa: F[F[A]]): F[A] = self.join[A](ffa)
+    }
+  }
+
+  def _bind[F[_]]: Lens_[Bind[F], _Bind[F]] = Lens(_.bind, x => _.copy(bind = x))
+  def _join[F[_]]: Lens_[Bind[F], _Join[F]] = Lens(_.join, x => _.copy(join = x))
+  def _toApply[F[_]]: Lens_[Bind[F], Apply[F]] = Lens(_.toApply, x => _.copy(toApply = x))
+
+  def lens[F[_], T: Has[Bind[F], ?]]: Lens_[T, Bind[F]] = Has.lens 
+
+  def bind[F[_], T: Has[Bind[F], ?]]: Lens_[T, Bind._Bind[F]] = lens.composeL(_bind) 
+  def join[F[_], T: Has[Bind[F], ?]]: Lens_[T, Bind._Join[F]] = lens.composeL(_join) 
+  def toApply[F[_], T: Has[Bind[F], ?]]: Lens_[T, Apply[F]] = lens.composeL(_toApply) 
+}
+~~~
+
+The first thing to note is that it generates a trait for each def. This allows
+lenses to be defined for each method, which is otherwise impossible since scala
+doesn't have first class higher-rank types, much less impredicative types. It
+then converts the typeclass to a case class. An apply method is added as syntax
+to each method-trait. Giving the original methods different names, and only
+adding apply as syntax, allows the traits to be mixed together for convenience,
+as shown later.
+
+The next thing to note is that it generates both a non-classy and classy lens
+for each field. The non-classy lenses should probably be removed, but I haven't
+done that yet. The classy lenses make use of the `Has` typeclass, and will work
+with any "subclass" of the typeclass. Their primary purpose is to allow
+overriding of methods, via set.
+
+## Typeclass Hierarchy and the Has Typeclass
+
+To make `Bind` a "subclass" of `Apply`, we also need to add following implicits
+to the [scato](https://github.com/aloiscochard/scato)-style hierarchy:
+
+~~~scala
+implicit def bindApply[F[_]](implicit e: Bind[F]): Apply[F] = e.toApply
+implicit def hasBindApply[F[_], A](implicit e: Has[Bind[F], A]): Has[Apply[F], A] = e.upcast(Bind.toApply)
+~~~
+
+The first produces an implicit `Apply` whenever there's an implicit `Bind`. The
+second witnesses that anything which `Has` a `Bind` also `Has` an `Apply`. This
+allows the classy lenses for `Apply` to be used with `Bind`.
+
+## Construction of Typeclass Instances:
+
+Typeclasses are constructed via regular functions:
+
+~~~scala
+object Bind {
+  def fromBindMap[F[_]](bind: _Bind[F], map: Functor._Map[F]): Bind[F] = {
+    val x = new Apply._Ap[F] with _Join[F] {
+      def ap[A, B](fa: F[A])(fab: F[A => B]): F[B] = bind(fab)(map(fa))
+      def join[A](ffa: F[F[A]]): F[A] = bind(ffa)(identity)
+    }
+    Bind(bind, x, Apply.fromApMap(x, map))
+  }
+
+  def fromJoinMap[F[_]](join: _Join[F], map: Functor._Map[F]): Bind[F] = {
+    val x = new _Bind[F] {
+      def bind[A, B](fa: F[A])(f: A => F[B]): F[B] = join(map(fa)(f))
+    }
+    fromBindMap(x, map).oset(join)(Bind.join)
+  }
+}
+~~~
+
+Note how the first definition mixes method-traits together for convenience, and
+how the second uses a lens to override the join method.
+
+# Coercible Newtypes
+
+The `Identity` newtype is defined as:
+
+~~~scala
+@meta.newtype
+object IdentityType {
+
+  type Identity[A] = A
+
+  val monad: Monad[Identity] = {
+    val x = new Bind._Bind[Identity] with Applicative._Pure[Identity] {
+      override def bind[A, B](a: A)(f: A => B): B = f(a)
+      override def pure[A](a: A): A = a
+    }
+    Monad.fromBindPure(x, x)
+  }
+}
+~~~
+
+The `newtype` macro transforms the above into:
+
+~~~scala
+object IdentityType {
+
+  trait Module {
+    type Identity[A]
+    val monad: Monad[Identity]
+    def apply[A](a: A): Identity[A]
+    def run[A](a: Identity[A]): A
+    def coercion[A, $A0]: Equality[A, Alias.Identity[$A0], Identity[A], Identity[$A0]]
+  }
+
+  object Alias extends Module {
+    type Identity[A] = A
+    val monad: Monad[Identity] = {
+      val x = new Bind._Bind[Identity] with Applicative._Pure[Identity] {
+        override def bind[A, B](a: A)(f: A => B): B = f(a)
+        override def pure[A](a: A): A = a
+      }
+      Monad.fromBindPure(x, x)
+    }
+    def apply[A](a: A): Identity[A] = a
+    def run[A](a: Identity[A]): A = a
+    def coercion[A, $A0]: Equality[A, Alias.Identity[$A0], Identity[A], Identity[$A0]] = Equality.refl
+  }
+
+  val Newtype: Module = Alias
+
+  class RunSyntax[A](val self: Identity[A]) {
+    def run: A = Newtype.run(self)
+  }
+
+  trait TopLevel {
+    val Identity: Newtype.type = Newtype
+    type Identity[A] = Newtype.Identity[A]
+    val IdentityAlias: Alias.type = Alias
+    type IdentityAlias[A] = Alias.Identity[A]
+    implicit def toIdentityRunSyntax[A](a: Identity[A]): RunSyntax[A] = new RunSyntax[A](a)
+  }
+
+}
+~~~
+
+`Newtype` is annotated to only have type `Module`, rather than `Alias.type`, so
+`Newtype.Identity[A]` is abstract, and doesn't reduce to `A`.
+
+The following trait is then defined and mixed into the package object:
+
+~~~scala
+trait IdentityModule extends IdentityType.TopLevel {
+  type Id[A] = IdentityAlias[A]
+  implicit val identityMonad: Monad[Identity] = Identity.monad
+}
+~~~
